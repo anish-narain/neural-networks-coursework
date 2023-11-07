@@ -307,7 +307,7 @@ class MultiLayerNetwork(object):
         #                       ** START OF YOUR CODE **
         #######################################################################
         
-        
+        layer_size = [self.input_dim] + self.neurons
         self._layers = None
 
             
