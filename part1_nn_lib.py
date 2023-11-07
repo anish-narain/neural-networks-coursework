@@ -117,14 +117,10 @@ class SigmoidLayer(Layer):
         Returns:
             {np.ndarray} -- Output array of shape (batch_size, n_out)
         """
-        #######################################################################
-        #                       ** START OF YOUR CODE **
-        #######################################################################
-        pass
+        self._cache_current = x
 
-        #######################################################################
-        #                       ** END OF YOUR CODE **
-        #######################################################################
+        return 1 / (1 + np.exp(-x))
+
 
     def backward(self, grad_z):
         """
@@ -140,14 +136,13 @@ class SigmoidLayer(Layer):
             {np.ndarray} -- Array containing gradient with respect to layer
                 input, of shape (batch_size, n_in).
         """
-        #######################################################################
-        #                       ** START OF YOUR CODE **
-        #######################################################################
-        pass
 
-        #######################################################################
-        #                       ** END OF YOUR CODE **
-        #######################################################################
+        sigmoid_output = 1 / (1 + np.exp(-self._cache_current))
+
+        sigmoid_derivative = sigmoid_output * (1 - sigmoid_output)
+    
+        return grad_z * sigmoid_derivative
+
 
 
 class ReluLayer(Layer):
@@ -177,7 +172,8 @@ class ReluLayer(Layer):
         #######################################################################
         #                       ** START OF YOUR CODE **
         #######################################################################
-        pass
+        self._cache_current = x  # Store the input for backward pass
+        return np.maximum(0, x)  # Apply ReLU function elementwise
 
         #######################################################################
         #                       ** END OF YOUR CODE **
@@ -200,7 +196,9 @@ class ReluLayer(Layer):
         #######################################################################
         #                       ** START OF YOUR CODE **
         #######################################################################
-        pass
+        grad_x = grad_z * (self._cache_current > 0).astype(grad_z.dtype)
+
+        return grad_x
 
         #######################################################################
         #                       ** END OF YOUR CODE **
@@ -223,19 +221,13 @@ class LinearLayer(Layer):
         self.n_in = n_in
         self.n_out = n_out
 
-        #######################################################################
-        #                       ** START OF YOUR CODE **
-        #######################################################################
-        self._W = None
-        self._b = None
+        self._W = xavier_init((n_in, n_out))
+        self._b = np.zeros(n_out, dtype=float)
 
         self._cache_current = None
         self._grad_W_current = None
         self._grad_b_current = None
 
-        #######################################################################
-        #                       ** END OF YOUR CODE **
-        #######################################################################
 
     def forward(self, x):
         """
@@ -250,14 +242,11 @@ class LinearLayer(Layer):
         Returns:
             {np.ndarray} -- Output array of shape (batch_size, n_out)
         """
-        #######################################################################
-        #                       ** START OF YOUR CODE **
-        #######################################################################
-        pass
 
-        #######################################################################
-        #                       ** END OF YOUR CODE **
-        #######################################################################
+        self._cache_current = x
+
+        return np.matmul(x, self._W) + self._b
+
 
     def backward(self, grad_z):
         """
@@ -273,14 +262,11 @@ class LinearLayer(Layer):
             {np.ndarray} -- Array containing gradient with respect to layer
                 input, of shape (batch_size, n_in).
         """
-        #######################################################################
-        #                       ** START OF YOUR CODE **
-        #######################################################################
-        pass
+        self._grad_W_current = np.matmul(self._cache_current.T, grad_z)
+        self._grad_b_current = np.sum(grad_z, axis=0)
 
-        #######################################################################
-        #                       ** END OF YOUR CODE **
-        #######################################################################
+        return np.matmul(grad_z, self._W.T)
+
 
     def update_params(self, learning_rate):
         """
@@ -290,14 +276,8 @@ class LinearLayer(Layer):
         Arguments:
             learning_rate {float} -- Learning rate of update step.
         """
-        #######################################################################
-        #                       ** START OF YOUR CODE **
-        #######################################################################
-        pass
-
-        #######################################################################
-        #                       ** END OF YOUR CODE **
-        #######################################################################
+        self._W -= self._grad_W_current * learning_rate
+        self._b -= self._grad_b_current * learning_rate
 
 
 class MultiLayerNetwork(object):
@@ -313,8 +293,8 @@ class MultiLayerNetwork(object):
         Arguments:
             - input_dim {int} -- Number of features in the input (excluding 
                 the batch dimension).
-            - neurons {list} -- Number of neurons in each linear layer 
-                represented as a list. The length of the list determines the 
+             - neurons {list} -- Number of neurons in each linear layer 
+                represented as a list. The length of the list determines the 
                 number of linear layers.
             - activations {list} -- List of the activation functions to apply 
                 to the output of each linear layer.
@@ -326,7 +306,11 @@ class MultiLayerNetwork(object):
         #######################################################################
         #                       ** START OF YOUR CODE **
         #######################################################################
+        
+        
         self._layers = None
+
+            
         #######################################################################
         #                       ** END OF YOUR CODE **
         #######################################################################

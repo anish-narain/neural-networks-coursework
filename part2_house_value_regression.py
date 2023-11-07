@@ -1,9 +1,11 @@
 import torch
+from torch import nn
 import pickle
 import numpy as np
 import pandas as pd
+from sklearn.preprocessing import LabelBinarizer, MinMaxScaler
 
-class Regressor():
+class Regressor(nn.Module):
 
     def __init__(self, x, nb_epoch = 1000):
         # You can add any input parameters you need
@@ -22,8 +24,9 @@ class Regressor():
         #######################################################################
         #                       ** START OF YOUR CODE **
         #######################################################################
+        super(Regressor, self).__init__()
 
-        # Replace this code with your own
+        # Determine input and output layer sizes
         X, _ = self._preprocessor(x, training = True)
         self.input_size = X.shape[1]
         self.output_size = 1
@@ -35,35 +38,29 @@ class Regressor():
         #######################################################################
 
     def _preprocessor(self, x, y = None, training = False):
-        """ 
-        Preprocess input of the network.
-          
-        Arguments:
-            - x {pd.DataFrame} -- Raw input array of shape 
-                (batch_size, input_size).
-            - y {pd.DataFrame} -- Raw target array of shape (batch_size, 1).
-            - training {boolean} -- Boolean indicating if we are training or 
-                testing the model.
+        # Initialize preprocess parameters if we are in training mode
+        if training:
+            self.scaler = MinMaxScaler()
+            self.encoder = LabelBinarizer()
+            # Add more initializations if needed
 
-        Returns:
-            - {torch.tensor} or {numpy.ndarray} -- Preprocessed input array of
-              size (batch_size, input_size). The input_size does not have to be the same as the input_size for x above.
-            - {torch.tensor} or {numpy.ndarray} -- Preprocessed target array of
-              size (batch_size, 1).
-            
-        """
+        # Handle missing values
+        x = x.fillna(x.mean())  # Fill numerical with mean; you could choose median or a placeholder value
+        # One-hot encode categorical variables
+        x['ocean_proximity'] = self.encoder.fit_transform(x['ocean_proximity']) if training else self.encoder.transform(x['ocean_proximity'])
+        # Normalize numerical variables
+        numerical_features = x.select_dtypes(include=[np.number]).columns
+        x[numerical_features] = self.scaler.fit_transform(x[numerical_features]) if training else self.scaler.transform(x[numerical_features])
+        
+        # Handle the target variable (if y is not None)
+        if y is not None:
+            if training:
+                self.target_scaler = MinMaxScaler()
+                y = self.target_scaler.fit_transform(y.values.reshape(-1, 1))
+            else:
+                y = self.target_scaler.transform(y.values.reshape(-1, 1))
 
-        #######################################################################
-        #                       ** START OF YOUR CODE **
-        #######################################################################
-
-        # Replace this code with your own
-        # Return preprocessed x and y, return None for y if it was None
-        return x, (y if isinstance(y, pd.DataFrame) else None)
-
-        #######################################################################
-        #                       ** END OF YOUR CODE **
-        #######################################################################
+        return torch.tensor(x.values, dtype=torch.float), torch.tensor(y, dtype=torch.float) if y is not None else None
 
         
     def fit(self, x, y):
@@ -189,7 +186,7 @@ def RegressorHyperParameterSearch():
     #######################################################################
 
 
-
+""""
 def example_main():
 
     output_label = "median_house_value"
@@ -215,7 +212,23 @@ def example_main():
     error = regressor.score(x_train, y_train)
     print("\nRegressor error: {}\n".format(error))
 
+"""
+
+def main():
+    # Load data
+    df = pd.read_csv('housing.csv')
+    # Assuming the target variable is 'median_house_value'
+    X = df.drop('median_house_value', axis=1)
+    y = df[['median_house_value']]
+
+    # Initialize the Regressor with the data
+    regressor = Regressor(X)
+
+    # Preprocess and split the data
+    X_processed, y_processed = regressor._preprocessor(X, y, training=True)
+    print("Processed X:", X_processed)
+    print("Processed y:", y_processed)
 
 if __name__ == "__main__":
-    example_main()
+    main()
 
