@@ -1,5 +1,6 @@
 import numpy as np
 import pickle
+from numpy.random import default_rng
 
 
 def xavier_init(size, gain = 1.0):
@@ -442,7 +443,10 @@ class Trainer(object):
         #######################################################################
         #                       ** START OF YOUR CODE **
         #######################################################################
-        self._loss_layer = None
+        if loss_fun == "mse":
+            self._loss_layer = MSELossLayer()
+        elif loss_fun == "cross_entropy":
+            self._loss_layer = CrossEntropyLossLayer()
         #######################################################################
         #                       ** END OF YOUR CODE **
         #######################################################################
@@ -465,8 +469,14 @@ class Trainer(object):
         #######################################################################
         #                       ** START OF YOUR CODE **
         #######################################################################
-        pass
+        random_generator = default_rng()
+        n = input_dataset.shape[0]
+        shuffled_indices = random_generator.permutation(n)
 
+        shuffled_inputs = input_dataset[shuffled_indices]
+        shuffled_targets = target_dataset[shuffled_indices]
+
+        return shuffled_inputs, shuffled_targets
         #######################################################################
         #                       ** END OF YOUR CODE **
         #######################################################################
@@ -494,7 +504,20 @@ class Trainer(object):
         #######################################################################
         #                       ** START OF YOUR CODE **
         #######################################################################
-        pass
+        n = input_dataset.shape[0]
+        num_batches = max(n // self.batch_size, 1)
+
+        for i in range(self.nb_epoch):
+            if self.shuffle_flag == True:
+                input_dataset, target_dataset = self.shuffle(input_dataset, target_dataset)
+            input_batches = np.array_split(input_dataset, num_batches)
+            target_batches = np.array_split(target_dataset, num_batches)
+            for j in range(len(input_batches)):
+                pred = self.network.forward(input_batches[j])
+                loss = self._loss_layer.forward(pred, target_batches[j])
+                grad_loss = self._loss_layer.backward()
+                self.network.backward(grad_loss)
+                self.network.update_params(self.learning_rate)
 
         #######################################################################
         #                       ** END OF YOUR CODE **
@@ -517,7 +540,8 @@ class Trainer(object):
         #######################################################################
         #                       ** START OF YOUR CODE **
         #######################################################################
-        pass
+        pred = self.network.forward(input_dataset)
+        return self._loss_layer(pred, target_dataset)
 
         #######################################################################
         #                       ** END OF YOUR CODE **
