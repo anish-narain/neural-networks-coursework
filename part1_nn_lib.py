@@ -312,7 +312,7 @@ class MultiLayerNetwork(object):
         self._layers = []
 
         for i in range(len(layers_size) - 1):
-            layer = Layer(layers_size[i], layers_size[i + 1])
+            layer = LinearLayer(layers_size[i], layers_size[i + 1])
             self._layers.append(layer)
             if activations[i] == "sigmoid":
                 self._layers.append(SigmoidLayer())
@@ -363,7 +363,7 @@ class MultiLayerNetwork(object):
         #######################################################################
         #                       ** START OF YOUR CODE **
         #######################################################################
-        for i in range(len(self._layers), -1, -1):
+        for i in range(len(self._layers) - 1, -1, -1):
             grad_z = self._layers[i].backward(grad_z)
         return grad_z
         #######################################################################
@@ -566,8 +566,8 @@ class Preprocessor(object):
         #######################################################################
         #                       ** START OF YOUR CODE **
         #######################################################################
-        pass
-
+        self.max_arr = np.max(data, axis=0)
+        self.min_arr = np.min(data, axis=0)
         #######################################################################
         #                       ** END OF YOUR CODE **
         #######################################################################
@@ -585,7 +585,8 @@ class Preprocessor(object):
         #######################################################################
         #                       ** START OF YOUR CODE **
         #######################################################################
-        pass
+        skewed = data - self.min_arr
+        return skewed / (self.max_arr - self.min_arr)
 
         #######################################################################
         #                       ** END OF YOUR CODE **
@@ -604,7 +605,8 @@ class Preprocessor(object):
         #######################################################################
         #                       ** START OF YOUR CODE **
         #######################################################################
-        pass
+        skewed = data * (self.max_arr - self.min_arr)
+        return skewed + self.min_arr
 
         #######################################################################
         #                       ** END OF YOUR CODE **
