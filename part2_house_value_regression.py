@@ -1,13 +1,20 @@
 import torch
 from torch import nn
+from torch.utils.data import DataLoader, TensorDataset
 import pickle
 import numpy as np
 import pandas as pd
-from sklearn.preprocessing import LabelBinarizer, MinMaxScaler
+from sklearn.preprocessing import LabelBinarizer, StandardScaler, MinMaxScaler, MaxAbsScaler, RobustScaler
+from sklearn.metrics import (
+    mean_squared_error,
+    mean_absolute_error,
+    r2_score,
+    explained_variance_score
+)
 
 class Regressor(nn.Module):
 
-    def __init__(self, x, nb_epoch = 1000):
+    def __init__(self, x, scaler, optimizer, batch_size, loss, shuffle_flag=True, nb_epoch = 1000):
         # You can add any input parameters you need
         # Remember to set them with a default value for LabTS tests
         """ 
@@ -20,22 +27,39 @@ class Regressor(nn.Module):
             - nb_epoch {int} -- number of epochs to train the network.
 
         """
-
-        #######################################################################
-        #                       ** START OF YOUR CODE **
-        #######################################################################
         super(Regressor, self).__init__()
 
         # Determine input and output layer sizes
         X, _ = self._preprocessor(x, training = True)
         self.input_size = X.shape[1]
         self.output_size = 1
-        self.nb_epoch = nb_epoch 
-        return
+        self.nb_epoch = nb_epoch
+        self.batch_size = batch_size
+        self.shuffle_flag = shuffle_flag
+        self.label_binarizer = LabelBinarizer()
 
-        #######################################################################
-        #                       ** END OF YOUR CODE **
-        #######################################################################
+        match scaler:
+            case "minmax":
+                self.scaler = MinMaxScaler()
+            case "maxabs":
+                self.scaler = MaxAbsScaler()
+            case "robust":
+                self.scaler = RobustScaler()
+            case _:
+                self.scaler = StandardScaler()
+
+        match optimizer:
+            case "adam":
+                self.optimizer = torch.optim.Adam(self.parameters(), lr=0.001)
+            case "sgd":
+                self.scaler = torch.optim.SGD(self.parameters(), lr=0.01, momentum=0.9)
+
+        match loss:
+            case "mse":
+                self.loss_function = nn.MSELoss()
+            case "mae":
+                self.loss_function = nn.L1Loss()
+        return
 
     def _preprocessor(self, x, y = None, training = False):
         """ 
@@ -55,24 +79,24 @@ class Regressor(nn.Module):
               size (batch_size, 1).
             
         """
-
-        #######################################################################
-        #                       ** START OF YOUR CODE **
-        #######################################################################
-        
         x = x.apply(lambda column: column.fillna(column.mean()))
 
-        label_binarizer = LabelBinarizer()
-        x['ocean_proximity'] = label_binarizer.fit_transform(x['ocean_proximity'])
+        # Normalize numerical variables
+        numerical_features = x.select_dtypes(include=[np.number]).columns
+        if training:
+            # Fit and transform for training data
+            x['ocean_proximity'] = self.label_binarizer.fit_transform(x['ocean_proximity'])
+            x[numerical_features] = self.scaler.fit_transform(x[numerical_features])
+            if y: y = self.scaler.fit_transform(y.values.reshape(-1, 1))
+        else:
+            # Transform for test/validation data
+            x['ocean_proximity'] = self.label_binarizer.transform(x['ocean_proximity'])
+            x[numerical_features] = self.scaler.transform(x[numerical_features])
+            if y: y = self.scaler.transform(y.values.reshape(-1, 1))
 
-        # Replace this code with your own
-        # Return preprocessed x and y, return None for y if it was None
         return x, (y if isinstance(y, pd.DataFrame) else None)
 
-        #######################################################################
-        #                       ** END OF YOUR CODE **
-        #######################################################################
-        
+
     def fit(self, x, y):
         """
         Regressor training function
@@ -86,17 +110,27 @@ class Regressor(nn.Module):
             self {Regressor} -- Trained model.
 
         """
+        # Convert preprocessed data to PyTorch tensors
+        X, Y = self._preprocessor(x, y=y, training=True)
+        X_tensor = torch.tensor(X.values, dtype=torch.float32)
+        Y_tensor = torch.tensor(Y, dtype=torch.float32)
 
-        #######################################################################
-        #                       ** START OF YOUR CODE **
-        #######################################################################
+        # Create a DataLoader for batch processing
+        dataset = TensorDataset(X_tensor, Y_tensor)
+        data_loader = DataLoader(dataset, batch_size=self.batch_size, shuffle=self.shuffle_flag)
 
-        X, Y = self._preprocessor(x, y = y, training = True) # Do not forget
+        # Training loop
+        for i in range(self.nb_epoch):
+            for batch_x, batch_y in data_loader:
+                # Forward pass
+                outputs = self.forward(batch_x)
+                loss = self.loss_function(outputs, batch_y)
+
+                # Backward pass and optimization
+                self.optimizer.zero_grad()
+                loss.backward()  
+                self.optimizer.step()  
         return self
-
-        #######################################################################
-        #                       ** END OF YOUR CODE **
-        #######################################################################
 
             
     def predict(self, x):
@@ -111,17 +145,23 @@ class Regressor(nn.Module):
             {np.ndarray} -- Predicted value for the given input (batch_size, 1).
 
         """
+        X, _ = self._preprocessor(x, training=False)
+        X_tensor = torch.tensor(X.values, dtype=torch.float32)
 
-        #######################################################################
-        #                       ** START OF YOUR CODE **
-        #######################################################################
+        # inherited method that sets the model to evaluate mode
+        self.eval()
 
-        X, _ = self._preprocessor(x, training = False) # Do not forget
-        pass
+        with torch.no_grad():  
+            predictions = self(X_tensor)
 
-        #######################################################################
-        #                       ** END OF YOUR CODE **
-        #######################################################################
+        # Convert the predictions back to a NumPy array
+        predictions_np = predictions.numpy()
+
+        # Invert y-value scaling form preprocessor
+        predictions_np = self.scaler.inverse_transform(predictions_np)
+
+        return predictions_np
+
 
     def score(self, x, y):
         """
@@ -136,17 +176,37 @@ class Regressor(nn.Module):
             {float} -- Quantification of the efficiency of the model.
 
         """
+        # Preprocess the input and target data
+        _, Y_true = self._preprocessor(x, y=y, training=False)
+        Y_true = self.scaler.inverse_transform(Y_true)  # Scale back up
 
-        #######################################################################
-        #                       ** START OF YOUR CODE **
-        #######################################################################
+        # Use the predict method to make predictions
+        Y_predicted = self.predict(x)
 
-        X, Y = self._preprocessor(x, y = y, training = False) # Do not forget
-        return 0 # Replace this code with your own
+        # Convert Y_true to a NumPy array if it's not already
+        Y_true = Y_true if isinstance(Y_true, np.ndarray) else Y_true.values
+       
+       # Calculating different evaluation metrics
+        mae = mean_absolute_error(Y_true, Y_predicted)
+        mse = mean_squared_error(Y_true, Y_predicted)
+        rmse = mean_squared_error(Y_true, Y_predicted, squared=False)
+        r2 = r2_score(Y_true, Y_predicted)
+        explained_variance = explained_variance_score(Y_true, Y_predicted)
 
-        #######################################################################
-        #                       ** END OF YOUR CODE **
-        #######################################################################
+        # MAPE - Mean Absolute Percentage Error
+        mape = np.mean(np.abs((Y_true - Y_predicted) / Y_true)) * 100
+
+        metrics = {
+            "Mean Absolute Error (MAE)": round(mae, 4),
+            "Mean Squared Error (MSE)": round(mse, 4),
+            "Root Mean Squared Error (RMSE)": round(rmse, 4),
+            "R^2 Score": round(r2, 4),
+            "Mean Absolute Percentage Error (MAPE)": round(mape, 4),
+            "Explained Variance Score": round(explained_variance, 4),
+        }
+        print(metrics)
+        return mse
+
 
 
 def save_regressor(trained_model): 
@@ -245,7 +305,6 @@ def test_preprocessor():
     preprocessed_X, _ = regressor._preprocessor(df, training=True)
     preprocessed_X.head()  # Display the first few rows of the preprocessed data
     
-
 
 if __name__ == "__main__":
     #main()

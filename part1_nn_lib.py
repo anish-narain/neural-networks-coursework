@@ -514,7 +514,7 @@ class Trainer(object):
             target_batches = np.array_split(target_dataset, num_batches)
             for j in range(len(input_batches)):
                 pred = self.network.forward(input_batches[j])
-                loss = self._loss_layer.forward(pred, target_batches[j])
+                self._loss_layer.forward(pred, target_batches[j])
                 grad_loss = self._loss_layer.backward()
                 self.network.backward(grad_loss)
                 self.network.update_params(self.learning_rate)
