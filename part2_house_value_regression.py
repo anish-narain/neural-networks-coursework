@@ -38,27 +38,15 @@ class Regressor(nn.Module):
         self.shuffle_flag = shuffle_flag
         self.label_binarizer = LabelBinarizer()
 
-        match scaler:
-            case "minmax":
-                self.scaler = MinMaxScaler()
-            case "maxabs":
-                self.scaler = MaxAbsScaler()
-            case "robust":
-                self.scaler = RobustScaler()
-            case _:
-                self.scaler = StandardScaler()
+        scalers = {"minmax": MinMaxScaler(), "maxabs": MaxAbsScaler(), "robust": RobustScaler(), "standard": StandardScaler()}
+        self.scaler = scalers[scaler]
 
-        match optimizer:
-            case "adam":
-                self.optimizer = torch.optim.Adam(self.parameters(), lr=0.001)
-            case "sgd":
-                self.scaler = torch.optim.SGD(self.parameters(), lr=0.01, momentum=0.9)
+        optimizers = {"adam": torch.optim.Adam(self.parameters(), lr=0.001), "sgd": torch.optim.SGD(self.parameters(), lr=0.01, momentum=0.9)}
+        self.optimizer = optimizers[optimizer]
 
-        match loss:
-            case "mse":
-                self.loss_function = nn.MSELoss()
-            case "mae":
-                self.loss_function = nn.L1Loss()
+        loss_function = {"mse": nn.MSELoss(), "mae": nn.L1Loss()}
+        self.loss_function = loss_function[loss]
+        
         return
 
     def _preprocessor(self, x, y = None, training = False):
@@ -245,15 +233,19 @@ def RegressorHyperParameterSearch():
 
     """
 
-    #######################################################################
-    #                       ** START OF YOUR CODE **
-    #######################################################################
+    # Identifying ideal number of neurons
+
+    # Identifying ideal activation function
+
+    # Identifying ideal optimizer
+
+    # Identifying ideal scaler type
+
+    # Identifying ideal batch size
+
 
     return  # Return the chosen hyper parameters
 
-    #######################################################################
-    #                       ** END OF YOUR CODE **
-    #######################################################################
 
 
 """"
