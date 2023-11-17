@@ -4,6 +4,7 @@ from torch.utils.data import DataLoader, TensorDataset
 import pickle
 import numpy as np
 import pandas as pd
+from sklearn import preprocessing
 from sklearn.preprocessing import LabelBinarizer, StandardScaler, MinMaxScaler, MaxAbsScaler, RobustScaler
 from sklearn.metrics import (
     mean_squared_error,
@@ -14,7 +15,7 @@ from sklearn.metrics import (
 
 class Regressor(nn.Module):
 
-    def __init__(self, x, scaler, optimizer, batch_size, loss, shuffle_flag=True, nb_epoch = 1000):
+    def __init__(self, x, scaler, optimizer, batch_size, loss, shuffle_flag=True, nb_epoch=1000, neurons=None, activations=None):
         # You can add any input parameters you need
         # Remember to set them with a default value for LabTS tests
         """ 
@@ -36,14 +37,38 @@ class Regressor(nn.Module):
         self.nb_epoch = nb_epoch
         self.batch_size = batch_size
         self.shuffle_flag = shuffle_flag
-        self.label_binarizer = LabelBinarizer()
+        self.label_binarizer = None
 
+        neurons = [10, 10] if neurons is None else neurons  # Default neurons in each layer
+        activations = ["relu", "relu"] if activations is None else activations  # Default activation functions
+
+        # Construct network structure
+        neurons = [self.input_size, *neurons, self.output_size]
+        activations.append("identity")  # output layer
+
+        layers = []
+        for i in range(len(neurons) - 1):
+            # Linear layer
+            layers.append(nn.Linear(neurons[i], neurons[i + 1]))
+            # Activation
+            if activations[i] == "relu":
+                layers.append(nn.ReLU())
+            elif activations[i] == "sigmoid":
+                layers.append(nn.Sigmoid())
+            elif activations[i] == "tanh":
+                layers.append(nn.Tanh())
+
+        self.layers = nn.Sequential(*layers)
+
+        # type of scaler
         scalers = {"minmax": MinMaxScaler(), "maxabs": MaxAbsScaler(), "robust": RobustScaler(), "standard": StandardScaler()}
         self.scaler = scalers[scaler]
 
+        # type of optimizer
         optimizers = {"adam": torch.optim.Adam(self.parameters(), lr=0.001), "sgd": torch.optim.SGD(self.parameters(), lr=0.01, momentum=0.9)}
         self.optimizer = optimizers[optimizer]
 
+        # type of loss function
         loss_function = {"mse": nn.MSELoss(), "mae": nn.L1Loss()}
         self.loss_function = loss_function[loss]
         
@@ -67,20 +92,24 @@ class Regressor(nn.Module):
               size (batch_size, 1).
             
         """
-        x = x.apply(lambda column: column.fillna(column.mean()))
+        # Separate numerical and categorical columns
+        numerical_cols = x.select_dtypes(include=['number'])
+        categorical_cols = x.select_dtypes(exclude=['number'])
+    
+        # Fill NaN values in numerical columns
+        x[numerical_cols.columns] = x[numerical_cols.columns].apply(lambda col: col.fillna(col.mean())) 
 
-        # Normalize numerical variables
-        numerical_features = x.select_dtypes(include=[np.number]).columns
         if training:
-            # Fit and transform for training data
-            x['ocean_proximity'] = self.label_binarizer.fit_transform(x['ocean_proximity'])
-            x[numerical_features] = self.scaler.fit_transform(x[numerical_features])
+            # Only fit the LabelBinarizer on training data
+            self.label_binarizer = LabelBinarizer()
+            categorical_cols = self.label_binarizer.fit_transform(categorical_cols)
             if y: y = self.scaler.fit_transform(y.values.reshape(-1, 1))
         else:
-            # Transform for test/validation data
-            x['ocean_proximity'] = self.label_binarizer.transform(x['ocean_proximity'])
-            x[numerical_features] = self.scaler.transform(x[numerical_features])
+            categorical_cols = self.label_binarizer.transform(categorical_cols)
             if y: y = self.scaler.transform(y.values.reshape(-1, 1))
+
+        # Combine numerical and categorical columns back
+        x = pd.concat([numerical_cols, pd.DataFrame(categorical_cols)], axis=1)
 
         return x, (y if isinstance(y, pd.DataFrame) else None)
 
@@ -192,7 +221,7 @@ class Regressor(nn.Module):
             "Mean Absolute Percentage Error (MAPE)": round(mape, 4),
             "Explained Variance Score": round(explained_variance, 4),
         }
-        print(metrics)
+        #print(metrics)
         return mse
 
 
@@ -204,7 +233,7 @@ def save_regressor(trained_model):
     # If you alter this, make sure it works in tandem with load_regressor
     with open('part2_model.pickle', 'wb') as target:
         pickle.dump(trained_model, target)
-    print("\nSaved model in part2_model.pickle\n")
+    #print("\nSaved model in part2_model.pickle\n")
 
 
 def load_regressor(): 
@@ -214,7 +243,7 @@ def load_regressor():
     # If you alter this, make sure it works in tandem with save_regressor
     with open('part2_model.pickle', 'rb') as target:
         trained_model = pickle.load(target)
-    print("\nLoaded model in part2_model.pickle\n")
+    #print("\nLoaded model in part2_model.pickle\n")
     return trained_model
 
 
@@ -233,6 +262,24 @@ def RegressorHyperParameterSearch():
 
     """
 
+    """
+    best_score = 0
+    best_params = []
+    
+    #from github
+    #num linear layer
+    #num batches per linear layer
+    
+    batch_size = [16, 32, 64]
+    num_neurons = []
+    activations = ["relu", "sigmoid", "tahn"]
+    optimizers = ["adam", "sgd"]
+    scaler = ["minmax", "maxabs", "robust", "standard"]
+
+    
+    num_epochs = [50, 100, 200]
+    learning_rate = [0.001, 0.01, 0.1]
+
     # Identifying ideal number of neurons
 
     # Identifying ideal activation function
@@ -242,6 +289,54 @@ def RegressorHyperParameterSearch():
     # Identifying ideal scaler type
 
     # Identifying ideal batch size
+
+    """
+
+    # Define ranges for hyperparameters
+    neurons_range = [[10, 10], [20, 20], [30, 30]]  # Example ranges
+    activation_functions = ["relu", "sigmoid", "tanh"]
+    optimizers = ["adam", "sgd"]
+    scalers = ["minmax", "maxabs", "robust", "standard"]
+    batch_sizes = [16, 32, 64]
+    epochs_range = [50, 100, 200]
+    learning_rates = [0.001, 0.01, 0.1]
+
+    best_score = float('inf')
+    best_params = {}
+
+
+    # Iterate over hyperparameter ranges
+    for neurons in neurons_range:
+        for activation in activation_functions:
+            for optimizer in optimizers:
+                for scaler in scalers:
+                    for batch_size in batch_sizes:
+                        for epoch in epochs_range:
+                            for lr in learning_rates:
+                                # Initialize the Regressor with current set of hyperparameters
+                                model = Regressor(x_train, scaler, optimizer, batch_size, 'mse', nb_epoch=epoch, neurons=neurons, activations=[activation]*len(neurons))
+                                
+                                # Fit the model
+                                model.fit(x_train, y_train)
+
+                                # Evaluate the model
+                                score = model.score(x_test, y_test)
+
+                                # Update best score and parameters
+                                if score < best_score:
+                                    best_score = score
+                                    best_params = {
+                                        "neurons": neurons,
+                                        "activation": activation,
+                                        "optimizer": optimizer,
+                                        "scaler": scaler,
+                                        "batch_size": batch_size,
+                                        "epochs": epoch,
+                                        "learning_rate": lr
+                                    }
+
+    print(f"Best Score: {best_score}")
+    print(f"Best Hyperparameters: {best_params}")
 
 
     return  # Return the chosen hyper parameters
@@ -293,7 +388,7 @@ def main():
 
 def test_preprocessor():
     df = pd.read_csv('housing.csv')
-    regressor = Regressor(df)
+    regressor = Regressor(df, scaler="minmax", optimizer="adam", batch_size=2000, loss="mse", shuffle_flag=True, nb_epoch=200)
     preprocessed_X, _ = regressor._preprocessor(df, training=True)
     preprocessed_X.head()  # Display the first few rows of the preprocessed data
     
