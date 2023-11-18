@@ -378,19 +378,23 @@ def plot_features(df):
     numeric_features = df.select_dtypes(include=['number']).columns.tolist()
     # Categorical features to plot
     categorical_features = df.select_dtypes(include=['object', 'category']).columns.tolist()
-    # Plotting numeric features
+    
+    # Plotting numeric features with histograms
     for feature in numeric_features:
         plt.figure(figsize=(10, 4))
-        plt.scatter(df.index, df[feature], alpha=0.5)
-        plt.title(f"Trend of {feature}")
-        plt.ylabel(feature)
-        plt.xlabel('Index')
+        df[feature].hist(bins=20)
+        plt.yscale('log')
+        plt.title(feature)
+        plt.ylabel('Frequency')
+        plt.xlabel(feature)
+        plt.grid(False) # Turn off the grid for a clean look similar to the image
         plt.show()
-    # Plotting categorical features
+    
+    # Plotting categorical features with bar plots
     for feature in categorical_features:
         plt.figure(figsize=(10, 4))
         df[feature].value_counts().plot(kind='bar')
-        plt.title(f"Distribution of {feature}")
+        plt.title(feature)
         plt.ylabel('Count')
         plt.xlabel('Category')
         plt.show()
@@ -399,7 +403,6 @@ def main():
     # Load data
     df = pd.read_csv('housing.csv')
 
-    # Now you can call the function with your DataFrame
     plot_features(df)
     # Assuming the target variable is 'median_house_value'
     X = df.drop('median_house_value', axis=1)
