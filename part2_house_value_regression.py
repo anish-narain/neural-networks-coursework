@@ -379,31 +379,41 @@ def plot_features(df):
     # Categorical features to plot
     categorical_features = df.select_dtypes(include=['object', 'category']).columns.tolist()
     
+    # Font settings
+    plt.rcParams['font.family'] = 'Cambria'
+    
+    # Function to format feature names (capitalizes and replaces underscores with spaces)
+    def format_feature_name(name):
+        return ' '.join(word.capitalize() for word in name.replace('_', ' ').split())
+    
     # Plotting numeric features with histograms
     for feature in numeric_features:
         plt.figure(figsize=(10, 4))
-        df[feature].hist(bins=20)
+        df[feature].hist(bins=20, color='purple', edgecolor='black', rwidth=0.8)  # Adjust bar width
         plt.yscale('log')
-        plt.title(feature)
+        feature_title = format_feature_name(feature) + ' Frequency'  # Format feature name for the title
+        plt.title(feature_title)
         plt.ylabel('Frequency')
-        plt.xlabel(feature)
-        plt.grid(False) # Turn off the grid for a clean look similar to the image
+        plt.xlabel(format_feature_name(feature))  # Format feature name for the x-axis label
+        plt.grid(True, which='both', linestyle='--', linewidth=0.5, alpha=0.7)  # Add grid lines and adjust transparency
         plt.show()
     
     # Plotting categorical features with bar plots
     for feature in categorical_features:
         plt.figure(figsize=(10, 4))
-        df[feature].value_counts().plot(kind='bar')
-        plt.title(feature)
+        series = df[feature].value_counts()
+        series.plot(kind='bar', color='purple', edgecolor='black', width=0.8)  # Adjust bar width and color
+        feature_title = format_feature_name(feature) + ' Count'  # Format feature name for the title
+        plt.title(feature_title)
         plt.ylabel('Count')
-        plt.xlabel('Category')
+        plt.xlabel(format_feature_name(feature))  # Format feature name for the x-axis label
+        plt.grid(True, which='both', linestyle='--', linewidth=0.5, alpha=0.7)  # Add grid lines and adjust transparency
         plt.show()
-
+        
 def main():
     # Load data
     df = pd.read_csv('housing.csv')
 
-    plot_features(df)
     # Assuming the target variable is 'median_house_value'
     X = df.drop('median_house_value', axis=1)
     y = df[['median_house_value']]
@@ -424,7 +434,9 @@ def test_preprocessor():
     
 
 if __name__ == "__main__":
-    main()
+    #main()
     #test_preprocessor()
+    df = pd.read_csv('housing.csv')
+    plot_features(df)
 
 
