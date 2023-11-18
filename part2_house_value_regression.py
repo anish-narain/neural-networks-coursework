@@ -373,7 +373,7 @@ def example_main():
 
 """
 
-def plot_features(df):
+def plot_features_for_report(df):
     # Numeric features to plot
     numeric_features = df.select_dtypes(include=['number']).columns.tolist()
     # Categorical features to plot
@@ -409,6 +409,27 @@ def plot_features(df):
         plt.xlabel(format_feature_name(feature))  # Format feature name for the x-axis label
         plt.grid(True, which='both', linestyle='--', linewidth=0.5, alpha=0.7)  # Add grid lines and adjust transparency
         plt.show()
+
+def calculate_missing_percentage_for_report(df):
+    """
+    This function takes a pandas DataFrame as input and prints out the percentage of missing values
+    for each column in the DataFrame.
+
+    Parameters:
+    df (pandas.DataFrame): The DataFrame for which to calculate missing value percentages.
+
+    Returns:
+    None
+    """
+    # Calculate the percentage of missing values for each column
+    missing_percentage = df.isnull().mean() * 100
+    
+    # Print the percentage of missing values for each column
+    print("Percentage of missing values for each column:")
+    for column, percentage in missing_percentage.items():
+        print(f"{column}: {percentage:.2f}%")
+    
+    return None  # Explicitly return None for clarity
         
 def main():
     # Load data
@@ -437,6 +458,7 @@ if __name__ == "__main__":
     #main()
     #test_preprocessor()
     df = pd.read_csv('housing.csv')
-    plot_features(df)
+    #plot_features_for_report(df)
+    calculate_missing_percentage_for_report(df)
 
 
