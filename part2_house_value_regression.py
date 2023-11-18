@@ -4,6 +4,7 @@ from torch.utils.data import DataLoader, TensorDataset
 import pickle
 import numpy as np
 import pandas as pd
+import matplotlib.pyplot as plt
 from sklearn import preprocessing
 from sklearn.preprocessing import LabelBinarizer, StandardScaler, MinMaxScaler, MaxAbsScaler, RobustScaler
 from sklearn.metrics import (
@@ -73,6 +74,7 @@ class Regressor(nn.Module):
         self.loss_function = loss_function[loss]
         
         return
+
 
     def _preprocessor(self, x, y = None, training = False):
         """ 
@@ -371,9 +373,34 @@ def example_main():
 
 """
 
+def plot_features(df):
+    # Numeric features to plot
+    numeric_features = df.select_dtypes(include=['number']).columns.tolist()
+    # Categorical features to plot
+    categorical_features = df.select_dtypes(include=['object', 'category']).columns.tolist()
+    # Plotting numeric features
+    for feature in numeric_features:
+        plt.figure(figsize=(10, 4))
+        plt.scatter(df.index, df[feature], alpha=0.5)
+        plt.title(f"Trend of {feature}")
+        plt.ylabel(feature)
+        plt.xlabel('Index')
+        plt.show()
+    # Plotting categorical features
+    for feature in categorical_features:
+        plt.figure(figsize=(10, 4))
+        df[feature].value_counts().plot(kind='bar')
+        plt.title(f"Distribution of {feature}")
+        plt.ylabel('Count')
+        plt.xlabel('Category')
+        plt.show()
+
 def main():
     # Load data
     df = pd.read_csv('housing.csv')
+
+    # Now you can call the function with your DataFrame
+    plot_features(df)
     # Assuming the target variable is 'median_house_value'
     X = df.drop('median_house_value', axis=1)
     y = df[['median_house_value']]
@@ -394,7 +421,7 @@ def test_preprocessor():
     
 
 if __name__ == "__main__":
-    #main()
-    test_preprocessor()
+    main()
+    #test_preprocessor()
 
 
