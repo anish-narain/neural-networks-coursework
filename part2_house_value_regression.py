@@ -1,3 +1,5 @@
+import itertools
+
 import torch
 from torch import nn
 from torch.utils.data import DataLoader, TensorDataset
@@ -38,7 +40,7 @@ class Regressor(nn.Module):
         self.nb_epoch = nb_epoch
         self.batch_size = batch_size
         self.shuffle_flag = shuffle_flag
-        self.label_binarizer = None
+        self.label_binarizer = LabelBinarizer()
 
         neurons = [10, 10] if neurons is None else neurons  # Default neurons in each layer
         activations = ["relu", "relu"] if activations is None else activations  # Default activation functions
@@ -103,12 +105,11 @@ class Regressor(nn.Module):
 
         if training:
             # Only fit the LabelBinarizer on training data
-            self.label_binarizer = LabelBinarizer()
             categorical_cols = self.label_binarizer.fit_transform(categorical_cols)
-            if y: y = self.scaler.fit_transform(y.values.reshape(-1, 1))
+            if isinstance(y, pd.DataFrame): y = self.scaler.fit_transform(y.values.reshape(-1, 1))
         else:
             categorical_cols = self.label_binarizer.transform(categorical_cols)
-            if y: y = self.scaler.transform(y.values.reshape(-1, 1))
+            if isinstance(y, pd.DataFrame): y = self.scaler.transform(y.values.reshape(-1, 1))
 
         # Combine numerical and categorical columns back
         x = pd.concat([numerical_cols, pd.DataFrame(categorical_cols)], axis=1)
@@ -250,7 +251,7 @@ def load_regressor():
 
 
 
-def RegressorHyperParameterSearch(): 
+def RegressorHyperParameterSearch(x_train, y_train, x_val, y_val):
     # Ensure to add whatever inputs you deem necessary to this function
     """
     Performs a hyper-parameter for fine-tuning the regressor implemented 
@@ -295,7 +296,9 @@ def RegressorHyperParameterSearch():
     """
 
     # Define ranges for hyperparameters
-    neurons_range = [[10, 10], [20, 20], [30, 30]]  # Example ranges
+    num_hidden_layers = [1, 3, 5]
+    num_neurons = [32, 64, 128]
+    loss_funcs = ["mse", "mae"]
     activation_functions = ["relu", "sigmoid", "tanh"]
     optimizers = ["adam", "sgd"]
     scalers = ["minmax", "maxabs", "robust", "standard"]
@@ -303,45 +306,61 @@ def RegressorHyperParameterSearch():
     epochs_range = [50, 100, 200]
     learning_rates = [0.001, 0.01, 0.1]
 
+    parameters = itertools.product(*[num_hidden_layers, num_neurons, loss_funcs, activation_functions, optimizers, scalers, batch_sizes, epochs_range, learning_rates])
     best_score = float('inf')
     best_params = {}
 
+    for hidden_layers, neurons, loss, activations, optimizer, scaler, batch_size, nb_epochs, learning_rate in parameters:
+        print("inside parameter loop")
+        model = Regressor(x_train, scaler, optimizer, batch_size, loss, nb_epochs, neurons, activations)
+        print("initialised a regressor")
+        model.fit(x_train, y_train)
+        print("fitted a regressor")
+        score = model.score(x_val, y_val)
+        if score < best_score:
+            best_score = score
+            best_params = {"hidden_layer": hidden_layers, "neurons": neurons, "loss": loss,"activations": activations, "optimizer": optimizer, "scaler":scaler, "batch_size" :batch_size, "nb_epochs": nb_epochs, "learning_rate": learning_rate}
 
-    # Iterate over hyperparameter ranges
-    for neurons in neurons_range:
-        for activation in activation_functions:
-            for optimizer in optimizers:
-                for scaler in scalers:
-                    for batch_size in batch_sizes:
-                        for epoch in epochs_range:
-                            for lr in learning_rates:
-                                # Initialize the Regressor with current set of hyperparameters
-                                model = Regressor(x_train, scaler, optimizer, batch_size, 'mse', nb_epoch=epoch, neurons=neurons, activations=[activation]*len(neurons))
-                                
-                                # Fit the model
-                                model.fit(x_train, y_train)
-
-                                # Evaluate the model
-                                score = model.score(x_test, y_test)
-
-                                # Update best score and parameters
-                                if score < best_score:
-                                    best_score = score
-                                    best_params = {
-                                        "neurons": neurons,
-                                        "activation": activation,
-                                        "optimizer": optimizer,
-                                        "scaler": scaler,
-                                        "batch_size": batch_size,
-                                        "epochs": epoch,
-                                        "learning_rate": lr
-                                    }
-
-    print(f"Best Score: {best_score}")
-    print(f"Best Hyperparameters: {best_params}")
+    print("best parameters")
+    print(best_params)
+    return best_params
 
 
-    return  # Return the chosen hyper parameters
+    # # Iterate over hyperparameter ranges
+    # for neurons in neurons_range:
+    #     for activation in activation_functions:
+    #         for optimizer in optimizers:
+    #             for scaler in scalers:
+    #                 for batch_size in batch_sizes:
+    #                     for epoch in epochs_range:
+    #                         for lr in learning_rates:
+    #                             # Initialize the Regressor with current set of hyperparameters
+    #                             model = Regressor(x_train, scaler, optimizer, batch_size, 'mse', nb_epoch=epoch, neurons=neurons, activations=[activation]*len(neurons))
+    #
+    #                             # Fit the model
+    #                             model.fit(x_train, y_train)
+    #
+    #                             # Evaluate the model
+    #                             score = model.score(x_test, y_test)
+    #
+    #                             # Update best score and parameters
+    #                             if score < best_score:
+    #                                 best_score = score
+    #                                 best_params = {
+    #                                     "neurons": neurons,
+    #                                     "activation": activation,
+    #                                     "optimizer": optimizer,
+    #                                     "scaler": scaler,
+    #                                     "batch_size": batch_size,
+    #                                     "epochs": epoch,
+    #                                     "learning_rate": lr
+    #                                 }
+    #
+    # print(f"Best Score: {best_score}")
+    # print(f"Best Hyperparameters: {best_params}")
+    #
+    #
+    # return  # Return the chosen hyper parameters
 
 
 
@@ -440,12 +459,24 @@ def main():
     y = df[['median_house_value']]
 
     # Initialize the Regressor with the data
-    regressor = Regressor(X)
+    regressor = Regressor(df, scaler="minmax", optimizer="adam", batch_size=2000, loss="mse", shuffle_flag=True, nb_epoch=200)
 
     # Preprocess and split the data
-    X_processed, y_processed = regressor._preprocessor(X, y, training=True)
-    print("Processed X:", X_processed)
-    print("Processed y:", y_processed)
+    processed, _ = regressor._preprocessor(df, training=True)
+    X_processed = processed.drop('median_house_value', axis=1)
+    y_processed = df[['median_house_value']]
+    print("Processed X:", X_processed.head())
+    print("Processed y:", y_processed.head())
+
+    #hyperparameter tuning
+    half = X_processed.shape[0]//2
+    x_train = (X_processed)
+    y_train = (y_processed)
+    x_val = (X_processed)
+    y_val = (y_processed)
+
+    print("hyperparameter tuning")
+    RegressorHyperParameterSearch(x_train, y_train, x_val, y_val)
 
 def test_preprocessor():
     df = pd.read_csv('housing.csv')
@@ -455,10 +486,10 @@ def test_preprocessor():
     
 
 if __name__ == "__main__":
-    #main()
+    main()
     #test_preprocessor()
     df = pd.read_csv('housing.csv')
     #plot_features_for_report(df)
-    calculate_missing_percentage_for_report(df)
+    #calculate_missing_percentage_for_report(df)
 
 
