@@ -17,6 +17,7 @@ from sklearn.metrics import (
     r2_score,
     explained_variance_score
 )
+from sklearn.model_selection import train_test_split
 
 class Regressor(nn.Module):
 
@@ -493,12 +494,11 @@ def main():
 
 
     #hyperparameter tuning
-    half = processed.shape[0]//2
-    train = processed
-    val = processed
+    half = processed.shape[0]//5
+    train, test = train_test_split(processed, test_size = 0.2, random_state = 12)
 
     print("hyperparameter tuning")
-    RegressorHyperParameterSearch(train, val)
+    RegressorHyperParameterSearch(train, test)
 
 def test_preprocessor():
     df = pd.read_csv('housing.csv')
