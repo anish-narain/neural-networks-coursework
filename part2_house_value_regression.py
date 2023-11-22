@@ -1,5 +1,7 @@
+import io
 import itertools
 
+import csv
 import torch
 from torch import nn
 from torch.utils.data import DataLoader, TensorDataset
@@ -34,13 +36,14 @@ class Regressor(nn.Module):
         super(Regressor, self).__init__()
 
         # Determine input and output layer sizes
+        self.label_binarizer = LabelBinarizer()
         X, _ = self._preprocessor(x, training = True)
         self.input_size = X.shape[1]
         self.output_size = 1
         self.nb_epoch = nb_epoch
         self.batch_size = batch_size
         self.shuffle_flag = shuffle_flag
-        self.label_binarizer = LabelBinarizer()
+
 
         neurons = [10, 10] if neurons is None else neurons  # Default neurons in each layer
         activations = ["relu", "relu"] if activations is None else activations  # Default activation functions
@@ -48,6 +51,8 @@ class Regressor(nn.Module):
         # Construct network structure
         neurons = [self.input_size, *neurons, self.output_size]
         activations.append("identity")  # output layer
+
+
 
         layers = []
         for i in range(len(neurons) - 1):
@@ -77,6 +82,8 @@ class Regressor(nn.Module):
         
         return
 
+    def forward(self, x):
+        return self.layers(x)
 
     def _preprocessor(self, x, y = None, training = False):
         """ 
@@ -96,20 +103,25 @@ class Regressor(nn.Module):
               size (batch_size, 1).
             
         """
+
         # Separate numerical and categorical columns
         numerical_cols = x.select_dtypes(include=['number'])
         categorical_cols = x.select_dtypes(exclude=['number'])
+
     
         # Fill NaN values in numerical columns
         x[numerical_cols.columns] = x[numerical_cols.columns].apply(lambda col: col.fillna(col.mean())) 
 
         if training:
             # Only fit the LabelBinarizer on training data
-            categorical_cols = self.label_binarizer.fit_transform(categorical_cols)
-            if isinstance(y, pd.DataFrame): y = self.scaler.fit_transform(y.values.reshape(-1, 1))
+            if not categorical_cols.empty:
+                categorical_cols = self.label_binarizer.fit_transform(categorical_cols)
+            if isinstance(y, pd.DataFrame):
+                y = y.apply(lambda col: self.scaler.fit_transform(col.values.reshape(-1, 1)).flatten())
         else:
-            categorical_cols = self.label_binarizer.transform(categorical_cols)
-            if isinstance(y, pd.DataFrame): y = self.scaler.transform(y.values.reshape(-1, 1))
+            if not categorical_cols.empty:
+                categorical_cols = self.label_binarizer.transform(categorical_cols)
+            if isinstance(y, pd.DataFrame): y.apply(lambda col: self.scaler.transform(col.values.reshape(-1, 1)).flatten())
 
         # Combine numerical and categorical columns back
         x = pd.concat([numerical_cols, pd.DataFrame(categorical_cols)], axis=1)
@@ -133,7 +145,7 @@ class Regressor(nn.Module):
         # Convert preprocessed data to PyTorch tensors
         X, Y = self._preprocessor(x, y=y, training=True)
         X_tensor = torch.tensor(X.values, dtype=torch.float32)
-        Y_tensor = torch.tensor(Y, dtype=torch.float32)
+        Y_tensor = torch.tensor(Y.values, dtype=torch.float32)
 
         # Create a DataLoader for batch processing
         dataset = TensorDataset(X_tensor, Y_tensor)
@@ -142,6 +154,7 @@ class Regressor(nn.Module):
         # Training loop
         for i in range(self.nb_epoch):
             for batch_x, batch_y in data_loader:
+
                 # Forward pass
                 outputs = self.forward(batch_x)
                 loss = self.loss_function(outputs, batch_y)
@@ -251,7 +264,7 @@ def load_regressor():
 
 
 
-def RegressorHyperParameterSearch(x_train, y_train, x_val, y_val):
+def RegressorHyperParameterSearch(train, val):
     # Ensure to add whatever inputs you deem necessary to this function
     """
     Performs a hyper-parameter for fine-tuning the regressor implemented 
@@ -296,30 +309,44 @@ def RegressorHyperParameterSearch(x_train, y_train, x_val, y_val):
     """
 
     # Define ranges for hyperparameters
-    num_hidden_layers = [1, 3, 5]
-    num_neurons = [32, 64, 128]
+    num_hidden_layers = [3, 5]
+    num_neurons = [64, 128]
     loss_funcs = ["mse", "mae"]
     activation_functions = ["relu", "sigmoid", "tanh"]
     optimizers = ["adam", "sgd"]
     scalers = ["minmax", "maxabs", "robust", "standard"]
-    batch_sizes = [16, 32, 64]
-    epochs_range = [50, 100, 200]
-    learning_rates = [0.001, 0.01, 0.1]
+    batch_sizes = [32, 64]
+    epochs_range = [50, 200]
+    learning_rates = [0.001, 0.01]
 
     parameters = itertools.product(*[num_hidden_layers, num_neurons, loss_funcs, activation_functions, optimizers, scalers, batch_sizes, epochs_range, learning_rates])
     best_score = float('inf')
     best_params = {}
 
+    x_train = train.drop('median_house_value', axis=1)
+    y_train = train[['median_house_value']]
+
+    x_val = val.drop('median_house_value', axis=1)
+    y_val = val[['median_house_value']]
+
+
+    file = open("values.csv", 'a')
+    csv_writer= csv.writer(file)
+
+    csv_writer.writerow(["hidden layer", "neurons", "loss", "activations", "optimizer", "scaler", "batch_size", "nb_epochs", "learning_rate", "score"])
     for hidden_layers, neurons, loss, activations, optimizer, scaler, batch_size, nb_epochs, learning_rate in parameters:
         print("inside parameter loop")
-        model = Regressor(x_train, scaler, optimizer, batch_size, loss, nb_epochs, neurons, activations)
-        print("initialised a regressor")
+        model = Regressor(x = x_train, scaler = scaler, optimizer = optimizer, batch_size = batch_size, loss = loss, nb_epoch = nb_epochs, neurons = [neurons]*hidden_layers, activations = [activations]*hidden_layers)
+        #print("initialised a regressor")
         model.fit(x_train, y_train)
-        print("fitted a regressor")
+        #print("fitted a regressor")
         score = model.score(x_val, y_val)
+        csv_writer.writerow([hidden_layers, neurons, loss, activations, optimizer, scaler, batch_size, nb_epochs, learning_rate, score])
+        print([hidden_layers, neurons, loss, activations, optimizer, scaler, batch_size, nb_epochs, learning_rate, score])
         if score < best_score:
             best_score = score
             best_params = {"hidden_layer": hidden_layers, "neurons": neurons, "loss": loss,"activations": activations, "optimizer": optimizer, "scaler":scaler, "batch_size" :batch_size, "nb_epochs": nb_epochs, "learning_rate": learning_rate}
+    file.close()
 
     print("best parameters")
     print(best_params)
@@ -463,26 +490,21 @@ def main():
 
     # Preprocess and split the data
     processed, _ = regressor._preprocessor(df, training=True)
-    X_processed = processed.drop('median_house_value', axis=1)
-    y_processed = df[['median_house_value']]
-    print("Processed X:", X_processed.head())
-    print("Processed y:", y_processed.head())
+
 
     #hyperparameter tuning
-    half = X_processed.shape[0]//2
-    x_train = (X_processed)
-    y_train = (y_processed)
-    x_val = (X_processed)
-    y_val = (y_processed)
+    half = processed.shape[0]//2
+    train = processed
+    val = processed
 
     print("hyperparameter tuning")
-    RegressorHyperParameterSearch(x_train, y_train, x_val, y_val)
+    RegressorHyperParameterSearch(train, val)
 
 def test_preprocessor():
     df = pd.read_csv('housing.csv')
     regressor = Regressor(df, scaler="minmax", optimizer="adam", batch_size=2000, loss="mse", shuffle_flag=True, nb_epoch=200)
     preprocessed_X, _ = regressor._preprocessor(df, training=True)
-    preprocessed_X.head()  # Display the first few rows of the preprocessed data
+    print(preprocessed_X.head())  # Display the first few rows of the preprocessed data
     
 
 if __name__ == "__main__":
