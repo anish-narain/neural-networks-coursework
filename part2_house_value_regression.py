@@ -40,6 +40,11 @@ class Regressor(nn.Module):
 
         # Determine input and output layer sizes
         self.label_binarizer = LabelBinarizer()
+
+        scalers = {"minmax": MinMaxScaler(), "maxabs": MaxAbsScaler(), "robust": RobustScaler(),
+                   "standard": StandardScaler()}
+        self.scaler = scalers[scaler]
+
         X, _ = self._preprocessor(x, training=True)
         self.input_size = X.shape[1]
         self.output_size = 1
@@ -48,7 +53,6 @@ class Regressor(nn.Module):
         self.shuffle_flag = shuffle_flag
         self.learning_rate = learning_rate
         self.num_hidden_layers = num_hidden_layers
-        self.cache = None
 
         neurons = [10, 10] if neurons is None else [neurons] * self.num_hidden_layers
         activations = ["relu", "relu"] if activations is None else [activations] * self.num_hidden_layers
@@ -71,10 +75,7 @@ class Regressor(nn.Module):
 
         self.layers = nn.Sequential(*layers)
 
-        # type of scaler
-        scalers = {"minmax": MinMaxScaler(), "maxabs": MaxAbsScaler(), "robust": RobustScaler(),
-                   "standard": StandardScaler()}
-        self.scaler = scalers[scaler]
+
 
         self.optimizer = torch.optim.Adam(self.parameters(), lr=self.learning_rate)
 
@@ -106,29 +107,32 @@ class Regressor(nn.Module):
             
         """
 
-        # Separate numerical and categorical columns
-        numerical_cols = x.select_dtypes(include=['number'])
-        categorical_cols = x.select_dtypes(exclude=['number'])
-
+        categorical_column = "ocean_proximity"
+        numerical_features = x.select_dtypes(include=[np.number]).columns
         # Fill NaN values in numerical columns
-        x[numerical_cols.columns] = x[numerical_cols.columns].apply(lambda col: col.fillna(col.mean()))
+        x = x.fillna(x.mean(numeric_only=True))
+
+        if y is not None:
+            y = y.fillna(y.mean(numeric_only=True))
+
 
         if training:
-            # Only fit the LabelBinarizer on training data
-            if not categorical_cols.empty:
-                categorical_cols = self.label_binarizer.fit_transform(categorical_cols)
-            if isinstance(y, pd.DataFrame):
-                y = y.apply(lambda col: self.scaler.fit_transform(col.values.reshape(-1, 1)).flatten())
+            x[categorical_column] = self.label_binarizer.fit_transform(x[categorical_column])
+            x[numerical_features] = self.scaler.fit_transform(x[numerical_features])
+            if y is not None:
+                y = self.scaler.fit_transform(y.values)
+
         else:
-            if not categorical_cols.empty:
-                categorical_cols = self.label_binarizer.transform(categorical_cols)
-            if isinstance(y, pd.DataFrame):
-                y.apply(lambda col: self.scaler.transform(col.values.reshape(-1, 1)).flatten())
+            x[categorical_column] = self.label_binarizer.transform(x[categorical_column])
+            x[numerical_features] = self.scaler.transform(x[numerical_features])
+            if y is not None:
+                y = self.scaler.transform(y.values)
 
-        # Combine numerical and categorical columns back
-        x = pd.concat([numerical_cols, pd.DataFrame(categorical_cols)], axis=1)
+        x = torch.tensor(x.values, dtype=torch.float32)
 
-        return torch.tensor(x.values), (torch.tensor(y.values) if y is not None else None)
+        y = torch.tensor(y.values.astype(np.float32)) if y is not None else None
+
+        return x, y
 
     def fit(self, x, y):
         """
@@ -365,10 +369,6 @@ def calculate_missing_percentage_for_report(df):
 def main():
     # Load data
     df = pd.read_csv('housing.csv')
-
-    # Assuming the target variable is 'median_house_value'
-    X = df.drop('median_house_value', axis=1)
-    y = df[['median_house_value']]
 
     # Initialize the Regressor with the data
     regressor = Regressor(df)
