@@ -19,9 +19,11 @@ from sklearn.metrics import (
 )
 from sklearn.model_selection import train_test_split
 
+
 class Regressor(nn.Module):
 
-    def __init__(self, x, scaler="minmax", learning_rate=0.01, batch_size=512, loss="mse", shuffle_flag=True, num_hidden_layers=3, nb_epoch=1000, neurons=None, activations=None):
+    def __init__(self, x, scaler="minmax", learning_rate=0.01, batch_size=512, loss="mse", shuffle_flag=True,
+                 num_hidden_layers=3, nb_epoch=1000, neurons=None, activations=None):
         # You can add any input parameters you need
         # Remember to set them with a default value for LabTS tests
         """ 
@@ -38,7 +40,7 @@ class Regressor(nn.Module):
 
         # Determine input and output layer sizes
         self.label_binarizer = LabelBinarizer()
-        X, _ = self._preprocessor(x, training = True)
+        X, _ = self._preprocessor(x, training=True)
         self.input_size = X.shape[1]
         self.output_size = 1
         self.nb_epoch = nb_epoch
@@ -46,6 +48,7 @@ class Regressor(nn.Module):
         self.shuffle_flag = shuffle_flag
         self.learning_rate = learning_rate
         self.num_hidden_layers = num_hidden_layers
+        self.cache = None
 
         neurons = [10, 10] if neurons is None else [neurons] * self.num_hidden_layers
         activations = ["relu", "relu"] if activations is None else [activations] * self.num_hidden_layers
@@ -69,7 +72,8 @@ class Regressor(nn.Module):
         self.layers = nn.Sequential(*layers)
 
         # type of scaler
-        scalers = {"minmax": MinMaxScaler(), "maxabs": MaxAbsScaler(), "robust": RobustScaler(), "standard": StandardScaler()}
+        scalers = {"minmax": MinMaxScaler(), "maxabs": MaxAbsScaler(), "robust": RobustScaler(),
+                   "standard": StandardScaler()}
         self.scaler = scalers[scaler]
 
         self.optimizer = torch.optim.Adam(self.parameters(), lr=self.learning_rate)
@@ -77,13 +81,13 @@ class Regressor(nn.Module):
         # type of loss function
         loss_function = {"mse": nn.MSELoss(), "mae": nn.L1Loss()}
         self.loss_function = loss_function[loss]
-        
+
         return
 
     def forward(self, x):
         return self.layers(x)
 
-    def _preprocessor(self, x, y = None, training = False):
+    def _preprocessor(self, x, y=None, training=False):
         """ 
         Preprocess input of the network.
           
@@ -106,9 +110,8 @@ class Regressor(nn.Module):
         numerical_cols = x.select_dtypes(include=['number'])
         categorical_cols = x.select_dtypes(exclude=['number'])
 
-    
         # Fill NaN values in numerical columns
-        x[numerical_cols.columns] = x[numerical_cols.columns].apply(lambda col: col.fillna(col.mean())) 
+        x[numerical_cols.columns] = x[numerical_cols.columns].apply(lambda col: col.fillna(col.mean()))
 
         if training:
             # Only fit the LabelBinarizer on training data
@@ -125,8 +128,7 @@ class Regressor(nn.Module):
         # Combine numerical and categorical columns back
         x = pd.concat([numerical_cols, pd.DataFrame(categorical_cols)], axis=1)
 
-        return x, (y if isinstance(y, pd.DataFrame) else None)
-
+        return torch.tensor(x.values), (torch.tensor(y.values) if y is not None else None)
 
     def fit(self, x, y):
         """
@@ -143,28 +145,24 @@ class Regressor(nn.Module):
         """
         # Convert preprocessed data to PyTorch tensors
         X, Y = self._preprocessor(x, y=y, training=True)
-        X_tensor = torch.tensor(X.values, dtype=torch.float32)
-        Y_tensor = torch.tensor(Y.values, dtype=torch.float32)
 
         # Create a DataLoader for batch processing
-        dataset = TensorDataset(X_tensor, Y_tensor)
+        dataset = TensorDataset(X, Y)
         data_loader = DataLoader(dataset, batch_size=self.batch_size, shuffle=self.shuffle_flag)
 
         # Training loop
         for i in range(self.nb_epoch):
             for batch_x, batch_y in data_loader:
-
                 # Forward pass
                 outputs = self.forward(batch_x)
                 loss = self.loss_function(outputs, batch_y)
 
                 # Backward pass and optimization
                 self.optimizer.zero_grad()
-                loss.backward()  
-                self.optimizer.step()  
+                loss.backward()
+                self.optimizer.step()
         return self
 
-            
     def predict(self, x):
         """
         Output the value corresponding to an input x.
@@ -178,13 +176,13 @@ class Regressor(nn.Module):
 
         """
         X, _ = self._preprocessor(x, training=False)
-        X_tensor = torch.tensor(X.values, dtype=torch.float32)
+
 
         # inherited method that sets the model to evaluate mode
         self.eval()
 
-        with torch.no_grad():  
-            predictions = self(X_tensor)
+        with torch.no_grad():
+            predictions = self(X)
 
         # Convert the predictions back to a NumPy array
         predictions_np = predictions.numpy()
@@ -193,7 +191,6 @@ class Regressor(nn.Module):
         predictions_np = self.scaler.inverse_transform(predictions_np)
 
         return predictions_np
-
 
     def score(self, x, y):
         """
@@ -215,59 +212,31 @@ class Regressor(nn.Module):
         # Use the predict method to make predictions
         Y_predicted = self.predict(x)
 
-
         # Convert Y_true to a NumPy array if it's not already
-        Y_true = Y_true if isinstance(Y_true, np.ndarray) else Y_true.values
-
-        if np.isnan(np.min(Y_true)):
-            print("y true")
-        elif np.isnan(np.min(Y_predicted)):
-            print("y predicted")
-       
-       # Calculating different evaluation metrics
-
-        mse = mean_squared_error(Y_true, Y_predicted)
-        # mae = mean_absolute_error(Y_true, Y_predicted)
-        # rmse = mean_squared_error(Y_true, Y_predicted, squared=False)
-        # r2 = r2_score(Y_true, Y_predicted)
-        # explained_variance = explained_variance_score(Y_true, Y_predicted)
-        #
-        # # MAPE - Mean Absolute Percentage Error
-        # mape = np.mean(np.abs((Y_true - Y_predicted) / Y_true)) * 100
-        #
-        # metrics = {
-        #     "Mean Absolute Error (MAE)": round(mae, 4),
-        #     "Mean Squared Error (MSE)": round(mse, 4),
-        #     "Root Mean Squared Error (RMSE)": round(rmse, 4),
-        #     "R^2 Score": round(r2, 4),
-        #     "Mean Absolute Percentage Error (MAPE)": round(mape, 4),
-        #     "Explained Variance Score": round(explained_variance, 4),
-        # }
-        # #print(metrics)
-        return mse
+        Y_true = Y_true.numpy()
+        rmse = mean_squared_error(Y_true, Y_predicted, squared=False)
+        return rmse
 
 
-
-def save_regressor(trained_model): 
+def save_regressor(trained_model):
     """ 
     Utility function to save the trained regressor model in part2_model.pickle.
     """
     # If you alter this, make sure it works in tandem with load_regressor
     with open('part2_model.pickle', 'wb') as target:
         pickle.dump(trained_model, target)
-    #print("\nSaved model in part2_model.pickle\n")
+    # print("\nSaved model in part2_model.pickle\n")
 
 
-def load_regressor(): 
+def load_regressor():
     """ 
     Utility function to load the trained regressor model in part2_model.pickle.
     """
     # If you alter this, make sure it works in tandem with save_regressor
     with open('part2_model.pickle', 'rb') as target:
         trained_model = pickle.load(target)
-    #print("\nLoaded model in part2_model.pickle\n")
+    # print("\nLoaded model in part2_model.pickle\n")
     return trained_model
-
 
 
 def RegressorHyperParameterSearch(train, val):
@@ -293,7 +262,9 @@ def RegressorHyperParameterSearch(train, val):
     epochs_range = [50, 100, 200]
     learning_rates = [0.001, 0.01]
 
-    parameters = itertools.product(*[num_hidden_layers, num_neurons, loss_funcs, activation_functions, scalers, batch_sizes, epochs_range, learning_rates])
+    parameters = itertools.product(
+        *[num_hidden_layers, num_neurons, loss_funcs, activation_functions, scalers, batch_sizes, epochs_range,
+          learning_rates])
     best_score = float('inf')
     best_params = {}
 
@@ -303,42 +274,47 @@ def RegressorHyperParameterSearch(train, val):
     x_val = val.drop('median_house_value', axis=1)
     y_val = val[['median_house_value']]
 
-
     file = open("values.csv", 'a')
-    csv_writer= csv.writer(file)
+    csv_writer = csv.writer(file)
 
     i = 0
 
-    csv_writer.writerow(["hidden layer", "neurons", "loss", "activations", "scaler", "batch_size", "nb_epochs", "learning_rate", "score"])
+    csv_writer.writerow(
+        ["hidden layer", "neurons", "loss", "activations", "scaler", "batch_size", "nb_epochs", "learning_rate",
+         "score"])
     for hidden_layers, neurons, loss, activations, scaler, batch_size, nb_epochs, learning_rate in parameters:
-        model = Regressor(x=x_train, scaler=scaler, learning_rate=learning_rate, batch_size=batch_size, loss=loss, nb_epoch=nb_epochs, num_hidden_layers=hidden_layers, neurons=neurons, activations=activations)
+        model = Regressor(x=x_train, scaler=scaler, learning_rate=learning_rate, batch_size=batch_size, loss=loss,
+                          nb_epoch=nb_epochs, num_hidden_layers=hidden_layers, neurons=neurons, activations=activations)
         model.fit(x_train, y_train)
         score = model.score(x_val, y_val)
-        csv_writer.writerow([hidden_layers, neurons, loss, activations, scaler, batch_size, nb_epochs, learning_rate, score])
+        csv_writer.writerow(
+            [hidden_layers, neurons, loss, activations, scaler, batch_size, nb_epochs, learning_rate, score])
         print(i, [hidden_layers, neurons, loss, activations, scaler, batch_size, nb_epochs, learning_rate, score])
         i += 1
         if score < best_score:
             best_score = score
-            best_params = {"hidden_layer": hidden_layers, "neurons": neurons, "loss": loss,"activations": activations, "scaler":scaler, "batch_size" :batch_size, "nb_epochs": nb_epochs, "learning_rate": learning_rate}
+            best_params = {"hidden_layer": hidden_layers, "neurons": neurons, "loss": loss, "activations": activations,
+                           "scaler": scaler, "batch_size": batch_size, "nb_epochs": nb_epochs,
+                           "learning_rate": learning_rate}
+    csv_writer.writerow(["best parameters"])
+    csv_writer.writerow(best_params.values())
     file.close()
-
-    print("best parameters")
-    print(best_params)
     return best_params
+
 
 def plot_features_for_report(df):
     # Numeric features to plot
     numeric_features = df.select_dtypes(include=['number']).columns.tolist()
     # Categorical features to plot
     categorical_features = df.select_dtypes(include=['object', 'category']).columns.tolist()
-    
+
     # Font settings
     plt.rcParams['font.family'] = 'Cambria'
-    
+
     # Function to format feature names (capitalizes and replaces underscores with spaces)
     def format_feature_name(name):
         return ' '.join(word.capitalize() for word in name.replace('_', ' ').split())
-    
+
     # Plotting numeric features with histograms
     for feature in numeric_features:
         plt.figure(figsize=(10, 4))
@@ -350,7 +326,7 @@ def plot_features_for_report(df):
         plt.xlabel(format_feature_name(feature))  # Format feature name for the x-axis label
         plt.grid(True, which='both', linestyle='--', linewidth=0.5, alpha=0.7)  # Add grid lines and adjust transparency
         plt.show()
-    
+
     # Plotting categorical features with bar plots
     for feature in categorical_features:
         plt.figure(figsize=(10, 4))
@@ -362,6 +338,7 @@ def plot_features_for_report(df):
         plt.xlabel(format_feature_name(feature))  # Format feature name for the x-axis label
         plt.grid(True, which='both', linestyle='--', linewidth=0.5, alpha=0.7)  # Add grid lines and adjust transparency
         plt.show()
+
 
 def calculate_missing_percentage_for_report(df):
     """
@@ -376,14 +353,15 @@ def calculate_missing_percentage_for_report(df):
     """
     # Calculate the percentage of missing values for each column
     missing_percentage = df.isnull().mean() * 100
-    
+
     # Print the percentage of missing values for each column
     print("Percentage of missing values for each column:")
     for column, percentage in missing_percentage.items():
         print(f"{column}: {percentage:.2f}%")
-    
+
     return None  # Explicitly return None for clarity
-        
+
+
 def main():
     # Load data
     df = pd.read_csv('housing.csv')
@@ -398,25 +376,23 @@ def main():
     # Preprocess and split the data
     processed, _ = regressor._preprocessor(df, training=True)
 
-
-    #hyperparameter tuning
-    train, test = train_test_split(processed, test_size = 0.2, random_state = 12)
+    # hyperparameter tuning
+    train, test = train_test_split(processed, test_size=0.2, random_state=12)
 
     print("hyperparameter tuning")
     RegressorHyperParameterSearch(train, test)
+
 
 def test_preprocessor():
     df = pd.read_csv('housing.csv')
     regressor = Regressor(df)
     preprocessed_X, _ = regressor._preprocessor(df, training=True)
     print(preprocessed_X.head())  # Display the first few rows of the preprocessed data
-    
+
 
 if __name__ == "__main__":
     main()
-    #test_preprocessor()
+    # test_preprocessor()
     df = pd.read_csv('housing.csv')
-    #plot_features_for_report(df)
-    #calculate_missing_percentage_for_report(df)
-
-
+    # plot_features_for_report(df)
+    # calculate_missing_percentage_for_report(df)
