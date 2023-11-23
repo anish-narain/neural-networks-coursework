@@ -18,7 +18,7 @@ from sklearn.metrics import (
     explained_variance_score
 )
 from sklearn.model_selection import train_test_split
-
+from part1_nn_lib import Preprocessor
 
 class Regressor(nn.Module):
 
@@ -105,7 +105,7 @@ class Regressor(nn.Module):
             - {torch.tensor} or {numpy.ndarray} -- Preprocessed target array of
               size (batch_size, 1).
             
-        """
+    
 
         categorical_column = "ocean_proximity"
         numerical_features = x.select_dtypes(include=[np.number]).columns
@@ -128,11 +128,44 @@ class Regressor(nn.Module):
             if y is not None:
                 y = self.scaler.transform(y.values)
 
-        x = torch.tensor(x.values, dtype=torch.float32)
+        print(type(x))
+        print(type(y))
+        print(x.shape)
+        print(x.to_numpy().astype(np.float32))
 
-        y = torch.tensor(y.values.astype(np.float32)) if y is not None else None
+        x = torch.tensor(x.to_numpy().astype(np.float32))
+        y = torch.tensor(y.to_numpy().astype(np.float32))
 
-        return x, y
+        """ 
+
+        onehot_column = "ocean_proximity"
+        numerical_features = x.select_dtypes(include=[np.number]).columns
+        if training:
+            self.means = x.mean(numeric_only=True)
+            
+        x = x.fillna(self.means)
+        if y is not None:
+            y = y.fillna(y.mean(numeric_only=True))
+        
+        if training:
+            self.label_binarizer.fit(x[onehot_column])
+            x[numerical_features] = self.scaler.fit_transform(x[numerical_features])
+        else:
+            x[numerical_features] = self.scaler.transform(x[numerical_features])
+            
+        onehot_x = x.join(pd.DataFrame(self.label_binarizer.transform(x[onehot_column]),columns=self.label_binarizer.classes_, index=x.index)).drop(onehot_column, axis=1)
+        x_numpy = onehot_x.to_numpy()
+        if training:
+            self.preprocessor = Preprocessor(x_numpy)
+
+        
+        """
+        x_tensor = torch.tensor(self.preprocessor.apply(x_numpy).astype(np.float32))
+        y_tensor = torch.tensor(y.to_numpy().astype(np.float32)) if y is not None else None
+        """
+        
+        return x_numpy, (y.to_numpy() if y is not None else None)
+
 
     def fit(self, x, y):
         """
@@ -148,7 +181,9 @@ class Regressor(nn.Module):
 
         """
         # Convert preprocessed data to PyTorch tensors
-        X, Y = self._preprocessor(x, y=y, training=True)
+        x_numpy, y = self._preprocessor(x, y=y, training=True)
+        X = torch.tensor(self.preprocessor.apply(x_numpy).astype(np.float32))
+        Y = torch.tensor(y.astype(np.float32)) if y is not None else None
 
         # Create a DataLoader for batch processing
         dataset = TensorDataset(X, Y)
@@ -179,7 +214,8 @@ class Regressor(nn.Module):
             {np.ndarray} -- Predicted value for the given input (batch_size, 1).
 
         """
-        X, _ = self._preprocessor(x, training=False)
+        x_numpy, _ = self._preprocessor(x, training=False)
+        X = torch.tensor(self.preprocessor.apply(x_numpy).astype(np.float32))
 
 
         # inherited method that sets the model to evaluate mode
@@ -187,12 +223,9 @@ class Regressor(nn.Module):
 
         with torch.no_grad():
             predictions = self(X)
-
+        
         # Convert the predictions back to a NumPy array
         predictions_np = predictions.numpy()
-
-        # Invert y-value scaling form preprocessor
-        predictions_np = self.scaler.inverse_transform(predictions_np)
 
         return predictions_np
 
@@ -211,13 +244,12 @@ class Regressor(nn.Module):
         """
         # Preprocess the input and target data
         _, Y_true = self._preprocessor(x, y=y, training=False)
-        Y_true = self.scaler.inverse_transform(Y_true)  # Scale back up
+        
+        print("y true shape", Y_true.shape)
 
         # Use the predict method to make predictions
         Y_predicted = self.predict(x)
 
-        # Convert Y_true to a NumPy array if it's not already
-        Y_true = Y_true.numpy()
         rmse = mean_squared_error(Y_true, Y_predicted, squared=False)
         return rmse
 
@@ -373,11 +405,8 @@ def main():
     # Initialize the Regressor with the data
     regressor = Regressor(df)
 
-    # Preprocess and split the data
-    processed, _ = regressor._preprocessor(df, training=True)
-
     # hyperparameter tuning
-    train, test = train_test_split(processed, test_size=0.2, random_state=12)
+    train, test = train_test_split(df, test_size=0.2, random_state=12)
 
     print("hyperparameter tuning")
     RegressorHyperParameterSearch(train, test)
