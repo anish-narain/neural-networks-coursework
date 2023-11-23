@@ -21,7 +21,7 @@ from sklearn.model_selection import train_test_split
 
 class Regressor(nn.Module):
 
-    def __init__(self, x, scaler, optimizer, batch_size, loss, shuffle_flag=True, nb_epoch=1000, neurons=None, activations=None):
+    def __init__(self, x, scaler="minmax", learning_rate=0.01, batch_size=512, loss="mse", shuffle_flag=True, num_hidden_layers=3, nb_epoch=1000, neurons=None, activations=None):
         # You can add any input parameters you need
         # Remember to set them with a default value for LabTS tests
         """ 
@@ -44,16 +44,15 @@ class Regressor(nn.Module):
         self.nb_epoch = nb_epoch
         self.batch_size = batch_size
         self.shuffle_flag = shuffle_flag
+        self.learning_rate = learning_rate
+        self.num_hidden_layers = num_hidden_layers
 
-
-        neurons = [10, 10] if neurons is None else neurons  # Default neurons in each layer
-        activations = ["relu", "relu"] if activations is None else activations  # Default activation functions
+        neurons = [10, 10] if neurons is None else [neurons] * self.num_hidden_layers
+        activations = ["relu", "relu"] if activations is None else [activations] * self.num_hidden_layers
 
         # Construct network structure
         neurons = [self.input_size, *neurons, self.output_size]
         activations.append("identity")  # output layer
-
-
 
         layers = []
         for i in range(len(neurons) - 1):
@@ -73,9 +72,7 @@ class Regressor(nn.Module):
         scalers = {"minmax": MinMaxScaler(), "maxabs": MaxAbsScaler(), "robust": RobustScaler(), "standard": StandardScaler()}
         self.scaler = scalers[scaler]
 
-        # type of optimizer
-        optimizers = {"adam": torch.optim.Adam(self.parameters(), lr=0.001), "sgd": torch.optim.SGD(self.parameters(), lr=0.01, momentum=0.9)}
-        self.optimizer = optimizers[optimizer]
+        self.optimizer = torch.optim.Adam(self.parameters(), lr=self.learning_rate)
 
         # type of loss function
         loss_function = {"mse": nn.MSELoss(), "mae": nn.L1Loss()}
@@ -122,7 +119,8 @@ class Regressor(nn.Module):
         else:
             if not categorical_cols.empty:
                 categorical_cols = self.label_binarizer.transform(categorical_cols)
-            if isinstance(y, pd.DataFrame): y.apply(lambda col: self.scaler.transform(col.values.reshape(-1, 1)).flatten())
+            if isinstance(y, pd.DataFrame):
+                y.apply(lambda col: self.scaler.transform(col.values.reshape(-1, 1)).flatten())
 
         # Combine numerical and categorical columns back
         x = pd.concat([numerical_cols, pd.DataFrame(categorical_cols)], axis=1)
@@ -217,28 +215,35 @@ class Regressor(nn.Module):
         # Use the predict method to make predictions
         Y_predicted = self.predict(x)
 
+
         # Convert Y_true to a NumPy array if it's not already
         Y_true = Y_true if isinstance(Y_true, np.ndarray) else Y_true.values
+
+        if np.isnan(np.min(Y_true)):
+            print("y true")
+        elif np.isnan(np.min(Y_predicted)):
+            print("y predicted")
        
        # Calculating different evaluation metrics
-        mae = mean_absolute_error(Y_true, Y_predicted)
+
         mse = mean_squared_error(Y_true, Y_predicted)
-        rmse = mean_squared_error(Y_true, Y_predicted, squared=False)
-        r2 = r2_score(Y_true, Y_predicted)
-        explained_variance = explained_variance_score(Y_true, Y_predicted)
-
-        # MAPE - Mean Absolute Percentage Error
-        mape = np.mean(np.abs((Y_true - Y_predicted) / Y_true)) * 100
-
-        metrics = {
-            "Mean Absolute Error (MAE)": round(mae, 4),
-            "Mean Squared Error (MSE)": round(mse, 4),
-            "Root Mean Squared Error (RMSE)": round(rmse, 4),
-            "R^2 Score": round(r2, 4),
-            "Mean Absolute Percentage Error (MAPE)": round(mape, 4),
-            "Explained Variance Score": round(explained_variance, 4),
-        }
-        #print(metrics)
+        # mae = mean_absolute_error(Y_true, Y_predicted)
+        # rmse = mean_squared_error(Y_true, Y_predicted, squared=False)
+        # r2 = r2_score(Y_true, Y_predicted)
+        # explained_variance = explained_variance_score(Y_true, Y_predicted)
+        #
+        # # MAPE - Mean Absolute Percentage Error
+        # mape = np.mean(np.abs((Y_true - Y_predicted) / Y_true)) * 100
+        #
+        # metrics = {
+        #     "Mean Absolute Error (MAE)": round(mae, 4),
+        #     "Mean Squared Error (MSE)": round(mse, 4),
+        #     "Root Mean Squared Error (RMSE)": round(rmse, 4),
+        #     "R^2 Score": round(r2, 4),
+        #     "Mean Absolute Percentage Error (MAPE)": round(mape, 4),
+        #     "Explained Variance Score": round(explained_variance, 4),
+        # }
+        # #print(metrics)
         return mse
 
 
@@ -278,49 +283,17 @@ def RegressorHyperParameterSearch(train, val):
         The function should return your optimised hyper-parameters. 
 
     """
-
-    """
-    best_score = 0
-    best_params = []
-    
-    #from github
-    #num linear layer
-    #num batches per linear layer
-    
-    batch_size = [16, 32, 64]
-    num_neurons = []
-    activations = ["relu", "sigmoid", "tahn"]
-    optimizers = ["adam", "sgd"]
-    scaler = ["minmax", "maxabs", "robust", "standard"]
-
-    
-    num_epochs = [50, 100, 200]
-    learning_rate = [0.001, 0.01, 0.1]
-
-    # Identifying ideal number of neurons
-
-    # Identifying ideal activation function
-
-    # Identifying ideal optimizer
-
-    # Identifying ideal scaler type
-
-    # Identifying ideal batch size
-
-    """
-
     # Define ranges for hyperparameters
     num_hidden_layers = [3, 5]
     num_neurons = [64, 128]
     loss_funcs = ["mse", "mae"]
     activation_functions = ["relu", "sigmoid", "tanh"]
-    optimizers = ["adam", "sgd"]
     scalers = ["minmax", "maxabs", "robust", "standard"]
-    batch_sizes = [32, 64]
-    epochs_range = [50, 200]
+    batch_sizes = [512, 1024]
+    epochs_range = [50, 100, 200]
     learning_rates = [0.001, 0.01]
 
-    parameters = itertools.product(*[num_hidden_layers, num_neurons, loss_funcs, activation_functions, optimizers, scalers, batch_sizes, epochs_range, learning_rates])
+    parameters = itertools.product(*[num_hidden_layers, num_neurons, loss_funcs, activation_functions, scalers, batch_sizes, epochs_range, learning_rates])
     best_score = float('inf')
     best_params = {}
 
@@ -334,91 +307,24 @@ def RegressorHyperParameterSearch(train, val):
     file = open("values.csv", 'a')
     csv_writer= csv.writer(file)
 
-    csv_writer.writerow(["hidden layer", "neurons", "loss", "activations", "optimizer", "scaler", "batch_size", "nb_epochs", "learning_rate", "score"])
-    for hidden_layers, neurons, loss, activations, optimizer, scaler, batch_size, nb_epochs, learning_rate in parameters:
-        print("inside parameter loop")
-        model = Regressor(x = x_train, scaler = scaler, optimizer = optimizer, batch_size = batch_size, loss = loss, nb_epoch = nb_epochs, neurons = [neurons]*hidden_layers, activations = [activations]*hidden_layers)
-        #print("initialised a regressor")
+    i = 0
+
+    csv_writer.writerow(["hidden layer", "neurons", "loss", "activations", "scaler", "batch_size", "nb_epochs", "learning_rate", "score"])
+    for hidden_layers, neurons, loss, activations, scaler, batch_size, nb_epochs, learning_rate in parameters:
+        model = Regressor(x=x_train, scaler=scaler, learning_rate=learning_rate, batch_size=batch_size, loss=loss, nb_epoch=nb_epochs, num_hidden_layers=hidden_layers, neurons=neurons, activations=activations)
         model.fit(x_train, y_train)
-        #print("fitted a regressor")
         score = model.score(x_val, y_val)
-        csv_writer.writerow([hidden_layers, neurons, loss, activations, optimizer, scaler, batch_size, nb_epochs, learning_rate, score])
-        print([hidden_layers, neurons, loss, activations, optimizer, scaler, batch_size, nb_epochs, learning_rate, score])
+        csv_writer.writerow([hidden_layers, neurons, loss, activations, scaler, batch_size, nb_epochs, learning_rate, score])
+        print(i, [hidden_layers, neurons, loss, activations, scaler, batch_size, nb_epochs, learning_rate, score])
+        i += 1
         if score < best_score:
             best_score = score
-            best_params = {"hidden_layer": hidden_layers, "neurons": neurons, "loss": loss,"activations": activations, "optimizer": optimizer, "scaler":scaler, "batch_size" :batch_size, "nb_epochs": nb_epochs, "learning_rate": learning_rate}
+            best_params = {"hidden_layer": hidden_layers, "neurons": neurons, "loss": loss,"activations": activations, "scaler":scaler, "batch_size" :batch_size, "nb_epochs": nb_epochs, "learning_rate": learning_rate}
     file.close()
 
     print("best parameters")
     print(best_params)
     return best_params
-
-
-    # # Iterate over hyperparameter ranges
-    # for neurons in neurons_range:
-    #     for activation in activation_functions:
-    #         for optimizer in optimizers:
-    #             for scaler in scalers:
-    #                 for batch_size in batch_sizes:
-    #                     for epoch in epochs_range:
-    #                         for lr in learning_rates:
-    #                             # Initialize the Regressor with current set of hyperparameters
-    #                             model = Regressor(x_train, scaler, optimizer, batch_size, 'mse', nb_epoch=epoch, neurons=neurons, activations=[activation]*len(neurons))
-    #
-    #                             # Fit the model
-    #                             model.fit(x_train, y_train)
-    #
-    #                             # Evaluate the model
-    #                             score = model.score(x_test, y_test)
-    #
-    #                             # Update best score and parameters
-    #                             if score < best_score:
-    #                                 best_score = score
-    #                                 best_params = {
-    #                                     "neurons": neurons,
-    #                                     "activation": activation,
-    #                                     "optimizer": optimizer,
-    #                                     "scaler": scaler,
-    #                                     "batch_size": batch_size,
-    #                                     "epochs": epoch,
-    #                                     "learning_rate": lr
-    #                                 }
-    #
-    # print(f"Best Score: {best_score}")
-    # print(f"Best Hyperparameters: {best_params}")
-    #
-    #
-    # return  # Return the chosen hyper parameters
-
-
-
-""""
-def example_main():
-
-    output_label = "median_house_value"
-
-    # Use pandas to read CSV data as it contains various object types
-    # Feel free to use another CSV reader tool
-    # But remember that LabTS tests take Pandas DataFrame as inputs
-    data = pd.read_csv("housing.csv") 
-
-    # Splitting input and output
-    x_train = data.loc[:, data.columns != output_label]
-    y_train = data.loc[:, [output_label]]
-
-    # Training
-    # This example trains on the whole available dataset. 
-    # You probably want to separate some held-out data 
-    # to make sure the model isn't overfitting
-    regressor = Regressor(x_train, nb_epoch = 10)
-    regressor.fit(x_train, y_train)
-    save_regressor(regressor)
-
-    # Error
-    error = regressor.score(x_train, y_train)
-    print("\nRegressor error: {}\n".format(error))
-
-"""
 
 def plot_features_for_report(df):
     # Numeric features to plot
@@ -487,14 +393,13 @@ def main():
     y = df[['median_house_value']]
 
     # Initialize the Regressor with the data
-    regressor = Regressor(df, scaler="minmax", optimizer="adam", batch_size=2000, loss="mse", shuffle_flag=True, nb_epoch=200)
+    regressor = Regressor(df)
 
     # Preprocess and split the data
     processed, _ = regressor._preprocessor(df, training=True)
 
 
     #hyperparameter tuning
-    half = processed.shape[0]//5
     train, test = train_test_split(processed, test_size = 0.2, random_state = 12)
 
     print("hyperparameter tuning")
@@ -502,7 +407,7 @@ def main():
 
 def test_preprocessor():
     df = pd.read_csv('housing.csv')
-    regressor = Regressor(df, scaler="minmax", optimizer="adam", batch_size=2000, loss="mse", shuffle_flag=True, nb_epoch=200)
+    regressor = Regressor(df)
     preprocessed_X, _ = regressor._preprocessor(df, training=True)
     print(preprocessed_X.head())  # Display the first few rows of the preprocessed data
     
