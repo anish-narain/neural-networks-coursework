@@ -13,3 +13,7 @@ hidden layer,neurons,loss,activations,scaler,batch_size,nb_epochs,learning_rate,
 hidden layer,neurons,loss,activations,scaler,batch_size,nb_epochs,learning_rate,score
 hidden layer,neurons,loss,activations,scaler,batch_size,nb_epochs,learning_rate,score
 hidden layer,neurons,loss,activations,scaler,batch_size,nb_epochs,learning_rate,score
+hidden layer,neurons,loss,activations,scaler,batch_size,nb_epochs,learning_rate,score
+3,64,mse,relu,minmax,512,50,0.001,92397.76750376131
+3,64,mse,relu,minmax,512,50,0.01,67779.07672475399
+3,64,mse,relu,minmax,512,100,0.001,80143.93442088149

@@ -303,6 +303,7 @@ def RegressorHyperParameterSearch(train, val):
           learning_rates])
     best_score = float('inf')
     best_params = {}
+    best_regressor = None
 
     x_train = train.drop('median_house_value', axis=1)
     y_train = train[['median_house_value']]
@@ -327,11 +328,16 @@ def RegressorHyperParameterSearch(train, val):
             [hidden_layers, neurons, loss, activations, scaler, batch_size, nb_epochs, learning_rate, score])
         print(i, [hidden_layers, neurons, loss, activations, scaler, batch_size, nb_epochs, learning_rate, score])
         i += 1
+        if i == 2: save_regressor(model)
+        
         if score < best_score:
             best_score = score
             best_params = {"hidden_layer": hidden_layers, "neurons": neurons, "loss": loss, "activations": activations,
                            "scaler": scaler, "batch_size": batch_size, "nb_epochs": nb_epochs,
                            "learning_rate": learning_rate}
+            best_regressor = model
+
+    save_regressor(best_regressor)
     csv_writer.writerow(["best parameters"])
     csv_writer.writerow(best_params.values())
     file.close()
