@@ -37,6 +37,7 @@ This function will iterate over a predefined set of hyperparameters to find the 
 Two additional functions are provided to help with data analysis and visulaisation of the data:
 
 **plot_features_for_report(df):** This function generates histograms and bar plots for the features in your dataset.
+
 **calculate_missing_percentage_for_report(df):** This function calculates and prints the percentage of missing values for each column in your dataset.
 Uncomment the respective function calls in the **if __name__ == "__main__":** block to use them.
 
