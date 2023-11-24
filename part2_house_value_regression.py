@@ -244,8 +244,6 @@ class Regressor(nn.Module):
         """
         # Preprocess the input and target data
         _, Y_true = self._preprocessor(x, y=y, training=False)
-        
-        print("y true shape", Y_true.shape)
 
         # Use the predict method to make predictions
         Y_predicted = self.predict(x)
@@ -317,7 +315,7 @@ def RegressorHyperParameterSearch(train, val):
     i = 0
 
     csv_writer.writerow(
-        ["hidden layer", "neurons", "loss", "activations", "scaler", "batch_size", "nb_epochs", "learning_rate",
+        ["counter", "hidden layer", "neurons", "loss", "activations", "scaler", "batch_size", "nb_epochs", "learning_rate",
          "score"])
     for hidden_layers, neurons, loss, activations, scaler, batch_size, nb_epochs, learning_rate in parameters:
         model = Regressor(x=x_train, scaler=scaler, learning_rate=learning_rate, batch_size=batch_size, loss=loss,
@@ -325,11 +323,10 @@ def RegressorHyperParameterSearch(train, val):
         model.fit(x_train, y_train)
         score = model.score(x_val, y_val)
         csv_writer.writerow(
-            [hidden_layers, neurons, loss, activations, scaler, batch_size, nb_epochs, learning_rate, score])
+            [i, hidden_layers, neurons, loss, activations, scaler, batch_size, nb_epochs, learning_rate, score])
         print(i, [hidden_layers, neurons, loss, activations, scaler, batch_size, nb_epochs, learning_rate, score])
         i += 1
-        if i == 2: save_regressor(model)
-        
+
         if score < best_score:
             best_score = score
             best_params = {"hidden_layer": hidden_layers, "neurons": neurons, "loss": loss, "activations": activations,
@@ -342,7 +339,6 @@ def RegressorHyperParameterSearch(train, val):
     csv_writer.writerow(best_params.values())
     file.close()
     return best_params
-
 
 def plot_features_for_report(df):
     # Numeric features to plot
