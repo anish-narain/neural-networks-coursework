@@ -508,7 +508,7 @@ class Trainer(object):
         num_batches = max(n // self.batch_size, 1)
 
         for i in range(self.nb_epoch):
-            if self.shuffle_flag == True:
+            if self.shuffle_flag:
                 input_dataset, target_dataset = self.shuffle(input_dataset, target_dataset)
             input_batches = np.array_split(input_dataset, num_batches)
             target_batches = np.array_split(target_dataset, num_batches)

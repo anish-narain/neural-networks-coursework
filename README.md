@@ -29,15 +29,22 @@ The script includes a function for hyperparameter tuning:
 RegressorHyperParameterSearch(train, test)
 ```
 
-This function will iterate over a predefined set of hyperparameters to find the combination that produces the best results on the validation dataset. This parameters were [hidden_layers, neurons, loss, activations, scaler, batch_size, nb_epochs, learning_rate].
+This function will iterate over a predefined set of hyperparameters to find the combination that produces the best results on the validation dataset. This parameters were [hidden_layers, neurons, loss, activations, scaler, batch_size, nb_epochs, learning_rate]. The function saves the results in a CSV file, loads the best model to a Pickle file, and returns the optimised hyperparameters.
+
+The script also includes a function to test the model loaded into **part2_model.pickle**:
+
+```
+ScoreBestModel(x_test, y_test):
+```
+This function loads the model, calculates its score on a separate test set, prints the result, and appends the score to 'values2.csv'. We used this function to analyse our best model in our report.
 
 
 ## Visualization and Analysis
 
-Two additional functions are provided to help with data analysis and visulaisation of the data:
+Three additional functions are provided to help with data analysis and visualisation of the data, and can be found in the **plot.py** file:
 
-**plot_features_for_report(df):** This function generates histograms and bar plots for the features in your dataset.
+**plot_features_for_report(df):** This function generates histograms and bar plots for the features in the dataset.
 
-**calculate_missing_percentage_for_report(df):** This function calculates and prints the percentage of missing values for each column in your dataset.
-Uncomment the respective function calls in the **if __name__ == "__main__":** block to use them.
+**calculate_missing_percentage_for_report(df):** This function calculates and prints the percentage of missing values for each column in the dataset.
 
+**plot_results_of_hyperparameter_search(values):** This functions generates bar plots and line graphs to allow us to visualise the impact of varying hyperparameters on the MSE loss of the predictions of the neural network. This allowed us to further fine tune our hyperparameters as detailed in our report.
