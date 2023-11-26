@@ -48,3 +48,7 @@ Three additional functions are provided to help with data analysis and visualisa
 **calculate_missing_percentage_for_report(df):** This function calculates and prints the percentage of missing values for each column in the dataset.
 
 **plot_results_of_hyperparameter_search(values):** This functions generates bar plots and line graphs to allow us to visualise the impact of varying hyperparameters on the MSE loss of the predictions of the neural network. This allowed us to further fine tune our hyperparameters as detailed in our report.
+
+## Running the Code
+
+To execute this code successfully, ensure to run the `main` function by executing the script. The main function loads the data, splits it into training, validation, and testing datasets, conducts hyper-parameter tuning, and evaluates the best model's performance on a separate testing dataset.
